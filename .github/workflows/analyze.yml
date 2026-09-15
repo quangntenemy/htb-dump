@@ -13,7 +13,17 @@ jobs:
       - name: Rebuild archive
         run: |
           set -euxo pipefail
-          cat espresso.part.*.b64 | tr -d '\r\n' | base64 -d > espresso.zip
+          python3 - <<'PY'
+          import base64, glob
+          from pathlib import Path
+          out=Path('espresso.zip')
+          with out.open('wb') as w:
+              for name in sorted(glob.glob('espresso.part.*.b64')):
+                  data=''.join(Path(name).read_text().split())
+                  w.write(base64.b64decode(data))
+                  print(name, len(data), 'base64 chars')
+          print('zip bytes:', out.stat().st_size)
+          PY
           unzip -P hackthebox -o espresso.zip -d extracted
           file extracted/hw_espresso/firmware.bin
           wc -c extracted/hw_espresso/firmware.bin
