@@ -1,0 +1,43 @@
+name: Analyze Espresso firmware
+on:
+  push:
+    paths:
+      - 'espresso.part.*.b64'
+      - '.github/workflows/analyze.yml'
+  workflow_dispatch:
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rebuild archive
+        run: |
+          set -euxo pipefail
+          cat espresso.part.*.b64 | tr -d '\r\n' | base64 -d > espresso.zip
+          unzip -P hackthebox -o espresso.zip -d extracted
+          file extracted/hw_espresso/firmware.bin
+          wc -c extracted/hw_espresso/firmware.bin
+      - name: Static triage
+        run: |
+          set -euxo pipefail
+          mkdir -p report
+          file extracted/hw_espresso/firmware.bin > report/file.txt
+          xxd -l 512 extracted/hw_espresso/firmware.bin > report/header.hex
+          strings -a -n 4 extracted/hw_espresso/firmware.bin > report/strings.txt
+          strings -a -n 4 -t x extracted/hw_espresso/firmware.bin > report/strings_offsets.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('extracted/hw_espresso/firmware.bin').read_bytes()
+          print('size',len(p))
+          print('first32',p[:32].hex())
+          print('last32',p[-32:].hex())
+          for needle in [b'HTB{',b'flag',b'ESP',b'espresso',b'UART',b'GPIO',b'password',b'key']:
+              print(needle, [hex(i) for i in range(len(p)) if p.startswith(needle,i)][:50])
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: espresso-analysis
+          path: |
+            extracted/hw_espresso/firmware.bin
+            report/
+          retention-days: 7
